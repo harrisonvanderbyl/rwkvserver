@@ -1,0 +1,9 @@
+[submodule "rwkv.cuh"]
+	path = rwkv.cuh
+	url = https://github.com/harrisonvanderbyl/rwkv.cuh
+[submodule "asio2"]
+	path = asio2
+	url = https://github.com/zhllxt/asio2.git
+[submodule "asio"]
+	path = asio
+	url = https://github.com/chriskohlhoff/asio.git
