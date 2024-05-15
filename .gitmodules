@@ -1,9 +1,9 @@
-[submodule "rwkv.cuh"]
-	path = ./include/rwkv.cuh
-	url = https://github.com/harrisonvanderbyl/rwkv.cuh
-[submodule "asio2"]
-	path = ./include/asio2
+[submodule "include/asio2"]
+	path = include/asio2
 	url = https://github.com/zhllxt/asio2.git
-[submodule "asio"]
-	path = ./include/asio
+[submodule "include/asio"]
+	path = include/asio
 	url = https://github.com/chriskohlhoff/asio.git
+[submodule "include/rwkv.cuh"]
+	path = include/rwkv.cuh
+	url = https://github.com/harrisonvanderbyl/rwkv.cuh
