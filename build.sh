@@ -1,0 +1,1 @@
+g++ ./server.cpp -o server -std=c++17 -lpthread -I./include/rwkv.cuh/include -I./include/asio2/include/ -I./include/asio/asio/include/
