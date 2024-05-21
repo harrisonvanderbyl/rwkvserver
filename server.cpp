@@ -1,8 +1,30 @@
 
 #include "asio2/asio2.hpp"
+#include "openssl/sha.h"
 #include <iostream>
+#include <iomanip>
+#include <sstream>
+#include <string>
+#include "rwkv.h"
+
+std::string sha256(const std::string &str)
+{
+    unsigned char hash[SHA256_DIGEST_LENGTH];
+    SHA256_CTX sha256;
+    SHA256_Init(&sha256);
+    SHA256_Update(&sha256, str.c_str(), str.size());
+    SHA256_Final(hash, &sha256);
+    std::stringstream ss;
+    for(int i = 0; i < SHA256_DIGEST_LENGTH; i++)
+    {
+        ss << std::hex << std::setw(2) << std::setfill('0') << (int)hash[i];
+    }
+    return ss.str();
+}
 int main( int argc, char *argv[])
 {
+    auto a = Tensor({3});
+    auto b = a.cuda();
     // file, threads, port
     std::map<std::string, std::string> args;
     for (int i = 1; i < argc; i++)
@@ -61,55 +83,56 @@ int main( int argc, char *argv[])
         }
     };
 
-    asio2::http_server server;
+    // create websocket client
+    std::string secret = "317981cc18424575b735e5f54cd48d9a";
+    std::string hashedapi_str = sha256("api-"+secret);
+    std::string hashedrouter_str =  sha256("router-"+secret);
+    std::string hashedagent_str =  sha256("agent-"+secret);
+    std::string url = "wss://localhost";
+    std::string randomid = "randomid";
+    std::string path = "/agent/register/"+hashedapi_str;
+    std::string wsFullUrl = path;
+    // std::cout << "wsFullUrl: " << wsFullUrl << std::endl;
+    auto ws = asio2::ws_client();
 
-    server.bind_recv([&](http::web_request &req, http::web_response &rep)
-                     {
-                         std::cout << req.path() << std::endl;
-                         std::cout << req.query() << std::endl;
-                     })
-        .bind_connect([](auto &session_ptr)
-                      { printf("client enter : %s %u %s %u\n",
-                               session_ptr->remote_address().c_str(), session_ptr->remote_port(),
-                               session_ptr->local_address().c_str(), session_ptr->local_port()); })
-        .bind_disconnect([](auto &session_ptr)
-                         { printf("client leave : %s %u %s\n",
-                                  session_ptr->remote_address().c_str(), session_ptr->remote_port(),
-                                  asio2::last_error_msg().c_str()); })
-        .bind_start([&]()
-                    { printf("start http server : %s %u %d %s\n",
-                             server.listen_address().c_str(), server.listen_port(),
-                             asio2::last_error_val(), asio2::last_error_msg().c_str()); })
-        .bind_stop([&]()
-                   { printf("stop : %d %s\n", asio2::last_error_val(), asio2::last_error_msg().c_str()); });
+    auto routeSummary = "(" + wsFullUrl +  + "|" + randomid + ")";
 
-    server.bind<http::verb::get, http::verb::post>("/*", [](http::web_request &req, http::web_response &rep)
-                                                    {
-                                                        
-                                                        
-                                                   
-                                                    // respond with hello world over the course of 2 seconds
-                                                    std::string message = "Hello, world!";
-                                                    rep.chunked(true);
-                                                    rep.keep_alive(true);
-                                                    for (auto c : message)
-                                                    {
-                                                        std::this_thread::sleep_for(std::chrono::milliseconds(200));
-                                                        // http::async_write();//rep, asio2::buffer(&c, 1));
-                                                        rep.body().file();
-                                                    }
-                                                   },
-                                                   aop_log{});
+    // ws.bind_connect([&]{
+
+    //     std::cout << "[Agent Setup] " + routeSummary + " Connection opened";
+        
+    // });
+
+    // ws.bind_recv([&](){
+    //     // std::cout << message;
+    // });
+
+    // ws.start(url,4000,path);
+    std::cout << "start" << std::endl;
+    ws.set_host(url);
+
+    std::cout << "set host" << std::endl;
+    ws.set_port(4000);
+
+    ws.set_upgrade_target(path);
+
+    ws.bind_connect([](){
+        std::cout << "Connected" << std::endl;
+    });
 
 
+    std::cout << "set port" << std::endl;
 
-    server.bind_not_found([](http::web_request &req, http::web_response &rep)
-                          { rep.fill_page(http::status::not_found); });
+    ws.start(url,4000,path);
+    ws.send("{\"type\":\"agent-setup\",\"id\":\""+randomid+"\", \"token\": \""+hashedagent_str+"\"}");
 
-    server.start("0.0.0.0", port);
+    std::cout << "Sent" << std::endl;
+    
 
     while (true)
     {
-        std::this_thread::sleep_for(std::chrono::seconds(1));
+        std::cout << "sitting" << std::endl;
+        std::this_thread::yield();
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));        
     }
 }
