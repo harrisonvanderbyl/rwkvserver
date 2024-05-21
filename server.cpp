@@ -1,4 +1,3 @@
-#include "openssl/sha.h"
 #include "asio.hpp"
 #include <iostream>
 #include <iomanip>
