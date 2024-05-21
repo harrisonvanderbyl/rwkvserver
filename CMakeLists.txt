@@ -29,5 +29,5 @@ else()
 endif()
 
 
-target_link_libraries(server pthread crypto)
+target_link_libraries(server pthread)
 target_include_directories(server PRIVATE ./include/rwkv.cuh/include ./include/asio/asio/include)
