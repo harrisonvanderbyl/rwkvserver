@@ -13,7 +13,7 @@ if(CUDA_FOUND)
     cuda_add_executable(server server.cpp ./include/rwkv.cuh/src/cudaops.cu)
     
     # add -march=native
-    target_compile_options(server PRIVATE -march=native -O3 -std=c++17)
+    target_compile_options(server PRIVATE -march=native -O3 -std=c++17 -g)
 
     
     target_include_directories(server PRIVATE /usr/local/cuda/include)

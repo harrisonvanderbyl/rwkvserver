@@ -6,6 +6,6 @@ curl http://localhost:8080/v1/completions \
     "prompt": "User: Say this is a test. Respond in JSON.\n\nAssisstant:",
     "max_tokens": 2048,
     "temperature": 1,
-    "stop": ["the","\n"]
+    "stop": []
    }'\
    --no-buffer
