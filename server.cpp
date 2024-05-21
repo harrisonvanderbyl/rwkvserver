@@ -75,11 +75,11 @@ int main(int argc, char *argv[])
     int threads = args.count("-threads") ? std::stoi(args["-threads"]) : 0;
     int port = args.count("-port") ? std::stoi(args["-port"]) : 8080;
 
-    auto model = new RWKV(file, 0);
+    auto model = new RWKV(file, threads);
     model->cuda();
 
     asio::io_service svc;
-    asio::ip::tcp::acceptor acc(svc, asio::ip::tcp::endpoint(asio::ip::address(), 8080));
+    asio::ip::tcp::acceptor acc(svc, asio::ip::tcp::endpoint(asio::ip::address(), port));
 
     auto sock = asio::ip::tcp::socket(svc);
 
