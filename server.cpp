@@ -25,7 +25,7 @@ public:
         svc = new asio::io_service();
         acc = new asio::ip::tcp::acceptor(*svc, asio::ip::tcp::endpoint(asio::ip::address(), port));
         sock = new asio::ip::tcp::socket(*svc);
-        model = new RWKV(file, threads);
+        model = new RWKV(file, threads, false, concurrency);
         if (device)
         {
             model->cuda();
@@ -197,8 +197,9 @@ int main(int argc, char *argv[])
     int threads = args.count("-threads") ? std::stoi(args["-threads"]) : 0;
     int port = args.count("-port") ? std::stoi(args["-port"]) : 8080;
     bool device = args.count("-cpu") ? false : true;
+    int concurrency = args.count("-b") ? std::stoi(args["-b"]) : 4;
 
-    RwkvServer server(file, threads, port, device);
+    RwkvServer server(file, threads, port, device, concurrency);
     server.modelLoop();
     server.start();
 }
