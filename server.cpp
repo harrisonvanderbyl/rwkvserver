@@ -6,25 +6,52 @@
 #include <sstream>
 #include <string>
 #include "rwkv.h"
+#include "tokenizer/tokenizer.hpp"
+#include "sampler/sample.h"
+#include <functional>
 
-std::string sha256(const std::string &str)
+void run(RWKV *model, Tensor logitsin, RWKVTokenizer *worldTokenizer, float temp, std::function<void(std::string output)> callback = [](std::string output)
+                                                                                  { get_threadpool()->print(output); },
+         std::function<void()> done = []() {})
+
 {
-    unsigned char hash[SHA256_DIGEST_LENGTH];
-    SHA256_CTX sha256;
-    SHA256_Init(&sha256);
-    SHA256_Update(&sha256, str.c_str(), str.size());
-    SHA256_Final(hash, &sha256);
-    std::stringstream ss;
-    for(int i = 0; i < SHA256_DIGEST_LENGTH; i++)
+    // std::cout << "Generating token " << i << std::endl;
+
+    auto pool = get_threadpool();
+    auto logs = (logitsin[0][logitsin.shape[1] - 1]);
+    size_t sample = dart((float *)logs.cpu().data, temp);
+    std::string output = "";
+    if (sample == 0)
     {
-        ss << std::hex << std::setw(2) << std::setfill('0') << (int)hash[i];
+        done();
+        return;
     }
-    return ss.str();
-}
-int main( int argc, char *argv[])
+    else
+    {
+        output = worldTokenizer->decode({sample});
+    }
+
+    if (output == "User")
+    {
+        done();
+        return;
+    }
+
+    callback(output);
+
+    auto logits = (*model)({{sample}});
+    pool->add_job(
+        [logits, model, worldTokenizer, temp, callback, done]
+        {
+            run(model, logits, worldTokenizer, temp, callback, done);
+        },
+        0);
+};
+
+int main(int argc, char *argv[])
 {
-    auto a = Tensor({3});
-    auto b = a.cuda();
+    RWKVTokenizer *worldTokenizer = new RWKVTokenizer("rwkv_vocab_v20230424.txt");
+
     // file, threads, port
     std::map<std::string, std::string> args;
     for (int i = 1; i < argc; i++)
@@ -48,91 +75,75 @@ int main( int argc, char *argv[])
     int threads = args.count("-threads") ? std::stoi(args["-threads"]) : 0;
     int port = args.count("-port") ? std::stoi(args["-port"]) : 8080;
 
+    auto model = new RWKV(file, 0);
+    model->cuda();
 
-    struct aop_log
-    {
-        bool before(http::web_request &req, http::web_response &rep)
-        {
-            asio2::detail::ignore_unused(rep);
-            printf("aop_log before %s\n", req.method_string().data());
-            return true;
-        }
-        bool after(std::shared_ptr<asio2::http_session> &session_ptr,
-                   http::web_request &req, http::web_response &rep)
-        {
-            asio2::detail::ignore_unused(session_ptr, req, rep);
-            printf("aop_log after\n");
-            return true;
-        }
-    };
+    asio::io_service svc;
+    asio::ip::tcp::acceptor acc(svc, asio::ip::tcp::endpoint(asio::ip::address(), 8080));
 
-    struct aop_check
-    {
-        bool before(std::shared_ptr<asio2::http_session> &session_ptr,
-                    http::web_request &req, http::web_response &rep)
-        {
-            asio2::detail::ignore_unused(session_ptr, req, rep);
-            printf("aop_check before\n");
-            return true;
-        }
-        bool after(http::web_request &req, http::web_response &rep)
-        {
-            asio2::detail::ignore_unused(req, rep);
-            printf("aop_check after\n");
-            return true;
-        }
-    };
+    auto sock = asio::ip::tcp::socket(svc);
 
-    // create websocket client
-    std::string secret = "317981cc18424575b735e5f54cd48d9a";
-    std::string hashedapi_str = sha256("api-"+secret);
-    std::string hashedrouter_str =  sha256("router-"+secret);
-    std::string hashedagent_str =  sha256("agent-"+secret);
-    std::string url = "wss://localhost";
-    std::string randomid = "randomid";
-    std::string path = "/agent/register/"+hashedapi_str;
-    std::string wsFullUrl = path;
-    // std::cout << "wsFullUrl: " << wsFullUrl << std::endl;
-    auto ws = asio2::ws_client();
+    acc.async_accept(sock, [&sock, &svc, &acc, worldTokenizer, model](asio::error_code ec)
+                     {
+                         if (!ec)
+                         {
+                            // copy source file to buffer data
 
-    auto routeSummary = "(" + wsFullUrl +  + "|" + randomid + ")";
+                             std::cout << "connection from " << sock.remote_endpoint() << "\n";
 
-    // ws.bind_connect([&]{
+                             auto str = std::string(10000, '\0');
+                             // read the request
+                                asio::streambuf data;
+                                asio::read_until(sock, data, "\r\n\r\n");
+                                std::string body = asio::buffer_cast<const char*>(data.data());
+                                // remove until the end of the header
+                                body = body.substr(body.find("\r\n\r\n") + 4);
 
-    //     std::cout << "[Agent Setup] " + routeSummary + " Connection opened";
-        
-    // });
+                            std::cout << body;
+                            //  std::string body = str.substr(s.find("\r\n\r\n") + 4);
 
-    // ws.bind_recv([&](){
-    //     // std::cout << message;
-    // });
+                             json j = json::parse(body);
+                             auto prompt = j["prompt"].get<std::string>();
 
-    // ws.start(url,4000,path);
-    std::cout << "start" << std::endl;
-    ws.set_host(url);
+                             auto tokens = worldTokenizer->encode(prompt);
 
-    std::cout << "set host" << std::endl;
-    ws.set_port(4000);
+                             auto out = (*model)({tokens});
 
-    ws.set_upgrade_target(path);
+                            auto pool = get_threadpool();
+                             auto logits = out[0][out.shape[1] - 1].cpu().data;
+                             size_t coutout = 0;
+                             bool done = false;
 
-    ws.bind_connect([](){
-        std::cout << "Connected" << std::endl;
-    });
+                            // write starting http response
+                            std::string response = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n";
+                            sock.write_some(asio::buffer(response));
 
+                             run(model, out, worldTokenizer, 0.5, [&coutout, &sock](std::string output)
+                                 {
+                                    std::cout << output << std::flush;
+                                    sock.send(asio::buffer(output));
+                                    coutout++; }, [&done]()
+                                 { done = true; });
 
-    std::cout << "set port" << std::endl;
+                             while (!done)
+                             {
+                                 // sleep
+                                 std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                             }
 
-    ws.start(url,4000,path);
-    ws.send("{\"type\":\"agent-setup\",\"id\":\""+randomid+"\", \"token\": \""+hashedagent_str+"\"}");
+                             sock.close();
+                         }
 
-    std::cout << "Sent" << std::endl;
-    
+                         
+                         // now write the whole story
+                        //  asio::async_write(sock, data, [&sock, &data /*keep alive*/](asio::error_code ec, size_t transferred) {});
 
-    while (true)
-    {
-        std::cout << "sitting" << std::endl;
-        std::this_thread::yield();
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));        
-    }
+                          });
+
+    svc.run();
+
+    // while (true)
+    // {
+    //     std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    // }
 }
