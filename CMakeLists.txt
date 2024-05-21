@@ -29,4 +29,4 @@ endif()
 
 
 target_link_libraries(server pthread crypto)
-target_include_directories(server PRIVATE ./include/rwkv.cuh/include ./include/asio2/include/ ./include/asio/asio/include/)
+target_include_directories(server PRIVATE ./include/rwkv.cuh/include ./include/asio/asio/include)
