@@ -6,9 +6,10 @@ cmake_minimum_required(VERSION 3.10)
 project(rwkv)
 
 # build with nvcc if nvcc is located in /usr/local/cuda/bin/nvcc
-set(CUDA_TOOLKIT_ROOT_DIR /usr/local/cuda)
-find_package(CUDA REQUIRED)
+
+find_package(CUDA)
 if(CUDA_FOUND)
+    set(CUDA_TOOLKIT_ROOT_DIR /usr/local/cuda)
     message(STATUS "CUDA found")
     cuda_add_executable(server server.cpp ./include/rwkv.cuh/src/cudaops.cu)
     
