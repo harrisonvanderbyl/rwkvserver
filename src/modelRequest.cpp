@@ -16,6 +16,7 @@ class ModelRequest
     RWKVTokenizer* RWKVtokenizer = nullptr;
     size_t* prompt_buffer = nullptr;
     size_t prompt_buffer_size = 0;
+    size_t max_length = 1024;
     bool done = true;
 
     ModelRequest(float* batch_index, RWKVTokenizer* tokenizer, size_t* current_token)
@@ -76,7 +77,8 @@ class ModelRequest
         
     }
 
-    void assign(asio::ip::tcp::socket* sock, std::vector<std::string> stop_strings, std::vector<size_t> stop_tokens, float temp, std::vector<size_t> prompt_buffer){
+    void assign(asio::ip::tcp::socket* sock, std::vector<std::string> stop_strings, std::vector<size_t> stop_tokens, float temp, std::vector<size_t> prompt_buffer, size_t max_length)
+    {
         this->sock = sock;
         this->stop_strings = stop_strings;
         this->stop_tokens.clear();
@@ -87,6 +89,7 @@ class ModelRequest
         this->stop_tokens.push_back(0);
         this->temp = temp;
         this->done = false;
+        this->max_length = max_length;
         this->prompt_buffer = new size_t[prompt_buffer.size()];
         for (size_t i = 0; i < prompt_buffer.size(); i++)
         {

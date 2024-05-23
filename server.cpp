@@ -18,6 +18,8 @@ public:
     std::vector<ModelRequest> requests;
     size_t *inputs = nullptr;
     float *logits = nullptr;
+    size_t lastModelLoop = 0;
+    size_t concurrency = 4;
 
     RwkvServer(std::string file, int threads, int port, bool device, size_t concurrency = 4)
     {
@@ -43,6 +45,8 @@ public:
         {
             requests.push_back(ModelRequest(logitsc + i * 65536, worldTokenizer, inputs + i));
         }
+
+        this->concurrency = concurrency;
     }
 
     ~RwkvServer()
@@ -55,6 +59,12 @@ public:
 
     void modelLoop()
     {
+        size_t currentModelLoopTime = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+        size_t timesincelastloop = currentModelLoopTime - lastModelLoop;
+        lastModelLoop = currentModelLoopTime;
+        auto timeinseconds = float(timesincelastloop) / 1000;
+        auto loopspersecond = 1 / float(timeinseconds);
+        std::cout << "\r" << std::fixed << std::setprecision(2) << loopspersecond*concurrency << " tps (" << loopspersecond << " tpsb) " << std::flush;
         auto pool = get_threadpool();
         auto inputbuff = std::vector<std::vector<size_t>>();
         for (size_t i = 0; i < requests.size(); i++)
@@ -117,6 +127,22 @@ public:
                                   json j = json::parse(body);
                                   auto prompt = j["prompt"].get<std::string>();
 
+                                  // fill in some defaults
+                                    if (!j.count("stop"))
+                                    {
+                                        j["stop"] = std::vector<std::string>{"\x17"};
+                                    }
+
+                                    if (!j.count("temperature"))
+                                    {
+                                        j["temperature"] = 0.8;
+                                    }
+
+                                    if (!j.count("max_length"))
+                                    {
+                                        j["max_length"] = 1024;
+                                    }
+
 
                                   // write starting http response
                                   std::string response = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n";
@@ -146,7 +172,7 @@ public:
                                                             std::vector<std::string> stop = j["stop"].get<std::vector<std::string>>();
                                                             
                                                             model->zero_state(i);
-                                                            requests[i].assign(nssock, stop, {}, j["temperature"].get<float>(), tokens);
+                                                            requests[i].assign(nssock, stop, {}, j["temperature"].get<float>(), tokens, j["max_length"].get<size_t>());
                                                             assigned = true;
                                                             break;
                                                         }
