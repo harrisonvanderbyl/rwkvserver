@@ -59,10 +59,10 @@ public:
 
     void modelLoop()
     {
-        size_t currentModelLoopTime = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+        size_t currentModelLoopTime = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
         size_t timesincelastloop = currentModelLoopTime - lastModelLoop;
         lastModelLoop = currentModelLoopTime;
-        auto timeinseconds = float(timesincelastloop) / 1000;
+        auto timeinseconds = float(timesincelastloop) / 1e9;
         auto loopspersecond = 1 / float(timeinseconds);
         std::cout << "\r" << std::fixed << std::setprecision(2) << loopspersecond*concurrency << " tps (" << loopspersecond << " tpsb) " << std::flush;
         auto pool = get_threadpool();
